@@ -94,13 +94,20 @@ export function usePullRequests({
       }
     }
 
-    // Filter by labels
+    // Filter by labels (AND logic - PR must have ALL selected labels)
     if (filters.labels && filters.labels.length > 0) {
       const prLabelNames = pr.labels.map((l) => l.name);
-      const hasMatchingLabel = filters.labels.some((filterLabel) =>
+      const hasAllLabels = filters.labels.every((filterLabel) =>
         prLabelNames.includes(filterLabel)
       );
-      if (!hasMatchingLabel) {
+      if (!hasAllLabels) {
+        return false;
+      }
+    }
+
+    // Filter by branches (target/base branch)
+    if (filters.branches && filters.branches.length > 0) {
+      if (!filters.branches.includes(pr.baseBranch)) {
         return false;
       }
     }

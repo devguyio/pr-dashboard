@@ -1,0 +1,78 @@
+# PR Dashboard Configuration
+# Copy this file to .envrc and fill in your values:
+#   cp envrc.example .envrc
+#   vim .envrc
+#   direnv allow
+
+# Image settings
+export IMAGE_REGISTRY="quay.io"
+export IMAGE_REPO="abdalla"
+export IMAGE_NAME="pr-dashboard"
+# IMAGE_TAG defaults to git SHA in Taskfile - uncomment to override
+# export IMAGE_TAG="v1.0.0"
+
+# OpenShift namespace
+export NAMESPACE="pr-dashboard"
+
+# Custom domain TLS (optional - for deploy-custom-domain task)
+# Get certs from Let's Encrypt: sudo certbot certonly --manual --preferred-challenges dns -d pr.hypershift.dev
+# export TLS_CERT="/etc/letsencrypt/live/pr.hypershift.dev/fullchain.pem"
+# export TLS_KEY="/etc/letsencrypt/live/pr.hypershift.dev/privkey.pem"
+
+# GitHub configuration (required - replace with your token)
+export GITHUB_TOKEN="ghp_your_token_here"
+
+# Default repositories for main dashboard
+export GITHUB_DEFAULT_REPOS="openshift/hypershift"
+
+# Dashboard configurations (JSON array)
+export GITHUB_DASHBOARDS='[
+  {
+    "id": "bots",
+    "name": "Bot PRs",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=main&authors=dependabot[bot],red-hat-konflux[bot],renovate[bot]"
+  },
+  {
+    "id": "hypershift-operator",
+    "name": "HyperShift Operator",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=main&labels=area/hypershift-operator"
+  },
+  {
+    "id": "control-plane-operator",
+    "name": "Control Plane Operator",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=main&labels=area/control-plane-operator"
+  },
+  {
+    "id": "docs",
+    "name": "Documentation",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=main&labels=area/documentation"
+  },
+  {
+    "id": "backport-4.18",
+    "name": "Backport 4.18",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=release-4.18"
+  },
+  {
+    "id": "backport-4.19",
+    "name": "Backport 4.19",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=release-4.19"
+  },
+  {
+    "id": "backport-4.20",
+    "name": "Backport 4.20",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=release-4.20"
+  },
+  {
+    "id": "backport-4.21",
+    "name": "Backport 4.21",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&branches=release-4.21"
+  }
+]'

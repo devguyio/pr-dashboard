@@ -1,0 +1,309 @@
+version: '3'
+
+set: [errexit, pipefail]
+
+vars:
+  IMAGE_REGISTRY: '{{.IMAGE_REGISTRY | default "quay.io"}}'
+  IMAGE_REPO: '{{.IMAGE_REPO | default "abdalla"}}'
+  IMAGE_NAME: '{{.IMAGE_NAME | default "pr-dashboard"}}'
+  GIT_SHA:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "latest"
+  IMAGE_TAG: '{{.IMAGE_TAG | default .GIT_SHA}}'
+  IMAGE: '{{.IMAGE_REGISTRY}}/{{.IMAGE_REPO}}/{{.IMAGE_NAME}}:{{.IMAGE_TAG}}'
+  APP_NAME: 'pr-dashboard'
+  NAMESPACE: '{{.NAMESPACE | default "pr-dashboard"}}'
+  CUSTOM_DOMAIN: '{{.CUSTOM_DOMAIN | default "pr.hypershift.dev"}}'
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # ============================================================================
+  # Container Tasks
+  # ============================================================================
+
+  build:
+    desc: Build container image with podman
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Building Container Image"
+        silent: true
+      - cmd: gum style --faint "Output:"
+        silent: true
+      - podman build -t {{.IMAGE}} -f Containerfile .
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 10 "Build Complete"
+        silent: true
+      - cmd: |
+          SIZE=$(podman images {{.IMAGE}} --format "{{`{{.Size}}`}}")
+          echo -e "Property,Value\nImage,{{.IMAGE}}\nSize,$SIZE\nStatus,✓ Built" | gum table --print --border rounded
+        silent: true
+
+  push:
+    desc: Push container image to registry
+    preconditions:
+      - sh: podman image exists {{.IMAGE}}
+        msg: "Image {{.IMAGE}} not found. Run 'task build' first."
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Pushing to Registry"
+        silent: true
+      - cmd: gum style --faint "Output:"
+        silent: true
+      - podman push {{.IMAGE}}
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 10 "Push Complete"
+        silent: true
+      - cmd: |
+          echo -e "Property,Value\nImage,{{.IMAGE}}\nRegistry,{{.IMAGE_REGISTRY}}\nStatus,✓ Pushed" | gum table --print --border rounded
+        silent: true
+
+  dev:
+    desc: Run development server
+    cmds:
+      - pnpm dev
+
+  container-run:
+    desc: Run container locally for testing
+    preconditions:
+      - sh: podman image exists {{.IMAGE}}
+        msg: "Image {{.IMAGE}} not found. Run 'task build' first."
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Running Container Locally"
+        silent: true
+      - podman rm -f pr-dashboard-local 2>/dev/null || true
+      - |
+        podman run -d --name pr-dashboard-local \
+          --network=host \
+          -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+          -e GITHUB_DEFAULT_REPOS="${GITHUB_DEFAULT_REPOS}" \
+          -e GITHUB_DASHBOARDS="${GITHUB_DASHBOARDS}" \
+          {{.IMAGE}}
+      - cmd: gum format "✓ Container running at http://localhost:3000"
+        silent: true
+
+  container-stop:
+    desc: Stop local container
+    cmds:
+      - podman rm -f pr-dashboard-local 2>/dev/null || true
+      - cmd: gum format "✓ Container stopped"
+        silent: true
+
+  container-logs:
+    desc: Show local container logs
+    cmds:
+      - podman logs -f pr-dashboard-local
+
+  # ============================================================================
+  # OpenShift Deploy Tasks
+  # ============================================================================
+
+  deploy:
+    desc: Deploy to OpenShift (secrets, configmap, app, routes)
+    cmds:
+      - task: deploy-secrets
+      - task: deploy-configmap
+      - task: deploy-app
+      - task: deploy-env
+      - task: deploy-route
+      - task: deploy-custom-domain
+      - task: deploy-status
+
+  deploy-secrets:
+    desc: Create secrets in OpenShift
+    vars:
+      SECRET_EXISTS:
+        sh: oc get secret {{.APP_NAME}}-secrets -n {{.NAMESPACE}} -o name 2>/dev/null || echo ""
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Creating Secrets"
+        silent: true
+      - cmd: |
+          if [ -n "{{.SECRET_EXISTS}}" ]; then
+            gum format "○ Secret already exists, skipping"
+          elif [ -z "${GITHUB_TOKEN}" ]; then
+            gum format "✗ GITHUB_TOKEN environment variable is required"
+            exit 1
+          else
+            oc create secret generic {{.APP_NAME}}-secrets -n {{.NAMESPACE}} \
+              --from-literal=GITHUB_TOKEN="${GITHUB_TOKEN}"
+            gum format "✓ Secret created"
+          fi
+        silent: true
+
+  deploy-configmap:
+    desc: Create configmap in OpenShift
+    vars:
+      CM_EXISTS:
+        sh: oc get configmap {{.APP_NAME}}-config -n {{.NAMESPACE}} -o name 2>/dev/null || echo ""
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Creating ConfigMap"
+        silent: true
+      - cmd: |
+          if [ -n "{{.CM_EXISTS}}" ]; then
+            gum format "○ ConfigMap already exists, updating..."
+            oc delete configmap {{.APP_NAME}}-config -n {{.NAMESPACE}}
+          fi
+        silent: true
+      - |
+        oc create configmap {{.APP_NAME}}-config -n {{.NAMESPACE}} \
+          --from-literal=GITHUB_DEFAULT_REPOS="${GITHUB_DEFAULT_REPOS:-openshift/hypershift}" \
+          --from-literal=GITHUB_DASHBOARDS="${GITHUB_DASHBOARDS:-[]}"
+      - cmd: gum format "✓ ConfigMap created"
+        silent: true
+
+  deploy-app:
+    desc: Deploy application to OpenShift
+    vars:
+      DEPLOYMENT_EXISTS:
+        sh: oc get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o name 2>/dev/null || echo ""
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Deploying Application"
+        silent: true
+      - cmd: |
+          if [ -n "{{.DEPLOYMENT_EXISTS}}" ]; then
+            gum format "○ Deployment exists, triggering rollout..."
+            oc set image deployment/{{.APP_NAME}} {{.APP_NAME}}={{.IMAGE}} -n {{.NAMESPACE}}
+            oc rollout restart deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
+          else
+            gum format "○ Creating new deployment..."
+            oc new-app {{.IMAGE}} --name={{.APP_NAME}} -n {{.NAMESPACE}}
+          fi
+        silent: true
+      - cmd: gum format "✓ Deployment updated"
+        silent: true
+
+  deploy-env:
+    internal: true
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Linking Environment Variables"
+        silent: true
+      - oc set env deployment/{{.APP_NAME}} --from=secret/{{.APP_NAME}}-secrets -n {{.NAMESPACE}}
+      - oc set env deployment/{{.APP_NAME}} --from=configmap/{{.APP_NAME}}-config -n {{.NAMESPACE}}
+      - cmd: gum format "✓ Environment variables linked"
+        silent: true
+
+  deploy-route:
+    desc: Create edge route for HTTPS access
+    vars:
+      ROUTE_EXISTS:
+        sh: oc get route {{.APP_NAME}} -n {{.NAMESPACE}} -o name 2>/dev/null || echo ""
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Creating Route"
+        silent: true
+      - cmd: |
+          if [ -n "{{.ROUTE_EXISTS}}" ]; then
+            gum format "○ Route already exists"
+          else
+            oc create route edge {{.APP_NAME}} --service={{.APP_NAME}} --port=3000 -n {{.NAMESPACE}}
+            gum format "✓ Route created"
+          fi
+        silent: true
+
+  deploy-custom-domain:
+    desc: Create edge route for custom domain (set TLS_CERT and TLS_KEY for custom certs)
+    vars:
+      CUSTOM_ROUTE_EXISTS:
+        sh: oc get route {{.APP_NAME}}-custom -n {{.NAMESPACE}} -o name 2>/dev/null || echo ""
+      TLS_CERT: '{{.TLS_CERT | default ""}}'
+      TLS_KEY: '{{.TLS_KEY | default ""}}'
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Creating Custom Domain Route"
+        silent: true
+      - cmd: |
+          if [ -n "{{.CUSTOM_ROUTE_EXISTS}}" ]; then
+            gum format "○ Custom route already exists, deleting..."
+            oc delete route {{.APP_NAME}}-custom -n {{.NAMESPACE}}
+          fi
+        silent: true
+      - cmd: |
+          if [ -n "{{.TLS_CERT}}" ] && [ -n "{{.TLS_KEY}}" ]; then
+            oc create route edge {{.APP_NAME}}-custom \
+              --service={{.APP_NAME}} \
+              --hostname={{.CUSTOM_DOMAIN}} \
+              --cert={{.TLS_CERT}} \
+              --key={{.TLS_KEY}} \
+              --port=3000 \
+              -n {{.NAMESPACE}}
+            gum format "✓ Custom domain route created for {{.CUSTOM_DOMAIN}} with TLS certificate"
+          else
+            oc create route edge {{.APP_NAME}}-custom \
+              --service={{.APP_NAME}} \
+              --hostname={{.CUSTOM_DOMAIN}} \
+              --port=3000 \
+              -n {{.NAMESPACE}}
+            gum format "✓ Custom domain route created for {{.CUSTOM_DOMAIN}} (using cluster default cert)"
+          fi
+        silent: true
+
+  deploy-status:
+    desc: Show deployment status
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 10 "Deployment Status"
+        silent: true
+      - cmd: |
+          ROUTE_HOST=$(oc get route {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.spec.host}' 2>/dev/null || echo "N/A")
+          CUSTOM_HOST=$(oc get route {{.APP_NAME}}-custom -n {{.NAMESPACE}} -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+          REPLICAS=$(oc get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
+          if [ -n "$CUSTOM_HOST" ]; then
+            echo -e "Property,Value\nApplication,{{.APP_NAME}}\nNamespace,{{.NAMESPACE}}\nImage,{{.IMAGE}}\nReplicas,$REPLICAS\nURL,https://$ROUTE_HOST\nCustom Domain,https://$CUSTOM_HOST" | gum table --print --border rounded
+          else
+            echo -e "Property,Value\nApplication,{{.APP_NAME}}\nNamespace,{{.NAMESPACE}}\nImage,{{.IMAGE}}\nReplicas,$REPLICAS\nURL,https://$ROUTE_HOST" | gum table --print --border rounded
+          fi
+        silent: true
+
+  deploy-logs:
+    desc: Show pod logs from OpenShift
+    cmds:
+      - oc logs -f deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
+
+  rollout:
+    desc: Restart the deployment
+    cmds:
+      - oc rollout restart deployment/{{.APP_NAME}} -n {{.NAMESPACE}}
+      - cmd: gum format "✓ Rollout initiated"
+        silent: true
+
+  undeploy:
+    desc: Delete all resources from OpenShift
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Deleting Resources"
+        silent: true
+      - oc delete route {{.APP_NAME}} -n {{.NAMESPACE}} --ignore-not-found
+      - oc delete route {{.APP_NAME}}-custom -n {{.NAMESPACE}} --ignore-not-found
+      - oc delete deployment {{.APP_NAME}} -n {{.NAMESPACE}} --ignore-not-found
+      - oc delete service {{.APP_NAME}} -n {{.NAMESPACE}} --ignore-not-found
+      - oc delete configmap {{.APP_NAME}}-config -n {{.NAMESPACE}} --ignore-not-found
+      - oc delete secret {{.APP_NAME}}-secrets -n {{.NAMESPACE}} --ignore-not-found
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 10 "Cleanup Complete"
+        silent: true
+      - cmd: gum format "✓ All resources deleted"
+        silent: true
+
+  # ============================================================================
+  # Convenience Tasks
+  # ============================================================================
+
+  all:
+    desc: Build, push, and deploy
+    cmds:
+      - task: build
+      - task: push
+      - task: deploy
+
+  status:
+    desc: Show environment status
+    vars:
+      IMAGE_EXISTS:
+        sh: podman image exists {{.IMAGE}} 2>/dev/null && echo "✓ exists" || echo "○ not built"
+      OC_LOGGED_IN:
+        sh: oc whoami 2>/dev/null || echo "○ not logged in"
+      DEPLOYMENT_STATUS:
+        sh: |
+          REPLICAS=$(oc get deployment {{.APP_NAME}} -n {{.NAMESPACE}} -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "")
+          if [ -n "$REPLICAS" ]; then echo "✓ $REPLICAS replica(s)"; else echo "○ not deployed"; fi
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "PR Dashboard Status"
+        silent: true
+      - cmd: |
+          echo -e "Component,Status\nImage,{{.IMAGE_EXISTS}}\nOpenShift,{{.OC_LOGGED_IN}}\nNamespace,{{.NAMESPACE}}\nDeployment,{{.DEPLOYMENT_STATUS}}" | gum table --print --border rounded
+        silent: true
+      - cmd: 'gum style --faint "Image: {{.IMAGE}}"'
+        silent: true

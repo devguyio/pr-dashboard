@@ -10,7 +10,7 @@ import { PRTable } from '../components/PRTable';
 import { useColumnConfig } from '../hooks/useColumnConfig';
 import { usePullRequests } from '../hooks/usePullRequests';
 import { useUrlFilters } from '../hooks/useUrlFilters';
-import type { Label } from '../types';
+import type { FilterOptions, Label } from '../types';
 
 interface DashboardConfig {
   id: string;
@@ -46,15 +46,17 @@ export default function DashboardPage() {
   });
 
   // Parse default filters from dashboard config
-  const defaultFilters = useMemo(() => {
+  const defaultFilters = useMemo((): Partial<FilterOptions> => {
     if (!dashboardConfig?.filter) {
-      return { states: ['open'] as const, labels: [], authors: [], searchQuery: '' };
+      return { states: ['open'], labels: [], authors: [], branches: [], searchQuery: '' };
     }
     const params = new URLSearchParams(dashboardConfig.filter);
+    const statesParam = params.get('states')?.split(',') || ['open'];
     return {
-      states: params.get('states')?.split(',') || ['open'],
+      states: statesParam as FilterOptions['states'],
       labels: params.get('labels')?.split(',').filter(Boolean) || [],
       authors: params.get('authors')?.split(',').filter(Boolean) || [],
+      branches: params.get('branches')?.split(',').filter(Boolean) || [],
       searchQuery: params.get('search') || '',
     };
   }, [dashboardConfig]);
@@ -93,15 +95,17 @@ export default function DashboardPage() {
     // Check if URL has explicit filter params
     const params = new URLSearchParams(window.location.search);
     const hasExplicitFilters =
-      params.has('states') || params.has('labels') || params.has('authors') || params.has('search');
+      params.has('states') || params.has('labels') || params.has('authors') || params.has('branches') || params.has('search');
 
     // Only apply dashboard defaults if no explicit URL filters
     if (!hasExplicitFilters) {
       const dashboardParams = new URLSearchParams(dashboardConfig.filter);
+      const statesParam = dashboardParams.get('states')?.split(',') || ['open'];
       setFilters({
-        states: dashboardParams.get('states')?.split(',') || ['open'],
+        states: statesParam as FilterOptions['states'],
         labels: dashboardParams.get('labels')?.split(',').filter(Boolean) || [],
         authors: dashboardParams.get('authors')?.split(',').filter(Boolean) || [],
+        branches: dashboardParams.get('branches')?.split(',').filter(Boolean) || [],
         searchQuery: dashboardParams.get('search') || '',
       });
     }
@@ -171,6 +175,15 @@ export default function DashboardPage() {
       }
     }
     return Array.from(authorMap.values()).sort((a, b) => a.login.localeCompare(b.login));
+  }, [pullRequests]);
+
+  // Derive unique target branches from all PRs
+  const availableBranches = useMemo(() => {
+    const branchSet = new Set<string>();
+    for (const pr of pullRequests) {
+      branchSet.add(pr.baseBranch);
+    }
+    return Array.from(branchSet).sort();
   }, [pullRequests]);
 
   // Fetch labels when repositories change
@@ -291,6 +304,7 @@ export default function DashboardPage() {
               filters={filters}
               availableLabels={availableLabels}
               availableAuthors={availableAuthors}
+              availableBranches={availableBranches}
               onFiltersChange={setFilters}
             />
 

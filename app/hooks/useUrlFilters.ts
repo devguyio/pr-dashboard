@@ -38,6 +38,9 @@ function filtersToSearchParams(filters: Partial<FilterOptions>): URLSearchParams
   if (filters.labels && filters.labels.length > 0) {
     params.set('labels', filters.labels.join(','));
   }
+  if (filters.branches && filters.branches.length > 0) {
+    params.set('branches', filters.branches.join(','));
+  }
   if (filters.authors && filters.authors.length > 0) {
     params.set('authors', filters.authors.join(','));
   }
@@ -57,6 +60,9 @@ function searchParamsToFilters(params: URLSearchParams): Partial<FilterOptions> 
   const labels = parseStringArray(params.get('labels'));
   if (labels) filters.labels = labels;
 
+  const branches = parseStringArray(params.get('branches'));
+  if (branches) filters.branches = branches;
+
   const authors = parseStringArray(params.get('authors'));
   if (authors) filters.authors = authors;
 
@@ -70,7 +76,11 @@ function hasUrlParams(): boolean {
   if (typeof window === 'undefined') return false;
   const params = new URLSearchParams(window.location.search);
   return (
-    params.has('states') || params.has('labels') || params.has('authors') || params.has('search')
+    params.has('states') ||
+    params.has('labels') ||
+    params.has('branches') ||
+    params.has('authors') ||
+    params.has('search')
   );
 }
 

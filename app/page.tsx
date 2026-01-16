@@ -163,6 +163,15 @@ export default function Home() {
     return Array.from(authorMap.values()).sort((a, b) => a.login.localeCompare(b.login));
   }, [pullRequests]);
 
+  // Derive unique target branches from all PRs
+  const availableBranches = useMemo(() => {
+    const branchSet = new Set<string>();
+    for (const pr of pullRequests) {
+      branchSet.add(pr.baseBranch);
+    }
+    return Array.from(branchSet).sort();
+  }, [pullRequests]);
+
   // Fetch labels when repositories change
   useEffect(() => {
     if (githubToken && selectedRepositories.length > 0) {
@@ -377,6 +386,7 @@ export default function Home() {
                   filters={filters}
                   availableLabels={availableLabels}
                   availableAuthors={availableAuthors}
+                  availableBranches={availableBranches}
                   onFiltersChange={setFilters}
                 />
 

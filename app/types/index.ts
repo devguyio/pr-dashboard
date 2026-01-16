@@ -28,6 +28,8 @@ export interface PullRequest {
     fullName: string;
     owner: string;
   };
+  baseBranch: string; // Target branch (e.g., "main")
+  headBranch: string; // Source branch (e.g., "feature/foo")
   labels: Label[];
   assignees: string[];
   reviewers: string[];
@@ -56,6 +58,7 @@ export interface FilterOptions {
   repositories: string[]; // Full repository names (owner/repo)
   labels: string[];
   states: PullRequest['state'][];
+  branches: string[]; // Target branches (base branch)
   assignees: string[];
   authors: string[];
   reviewers: string[];
@@ -156,6 +159,8 @@ export const transformPullRequest = (pr: GitHubPullRequest): PullRequest => {
       fullName: pr.base.repo.full_name,
       owner: pr.base.repo.owner.login,
     },
+    baseBranch: pr.base.ref,
+    headBranch: pr.head.ref,
     labels: pr.labels.map((label) => ({
       id: label.id,
       name: label.name,

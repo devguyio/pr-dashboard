@@ -1,133 +1,215 @@
 # PR Dashboard
 
-A modern Next.js application for viewing and managing pull requests across multiple GitHub repositories. Features a configurable column-based interface with advanced filtering capabilities and support for both public and private repositories.
+Multi-dashboard GitHub PR monitor. Fully configurable.
+
+Forked from [mattmontgomery/pr-dashboard](https://github.com/mattmontgomery/pr-dashboard).
 
 ## Features
 
-- 🔐 **GitHub Integration** - Securely connect with your GitHub personal access token
-- 📊 **Multi-Repository View** - Monitor PRs across all your repositories
-- 🎯 **Advanced Filtering** - Filter by repository, labels, status, and search
-- 📋 **Configurable Columns** - Customize which columns to display
-- 🎨 **Modern UI** - Clean, responsive interface built with Tailwind CSS
-- ⚡ **Fast & Efficient** - Built on Next.js 16 with React 19
+- **Multi-Dashboard Support** - Configure multiple dashboards with different repository sets and default filters
+- **URL-Based Filter State** - Share filtered views via URL parameters
+- **Advanced Filtering** - Filter by state, labels, authors, branches, and search text
+- **Label Grouping** - Group PRs by label prefixes for organized views
+- **PR Age Highlighting** - Visual indicators for PRs older than 7 days
+- **Server-Side Caching** - Reduces GitHub API calls with configurable TTL
 
 ## Tech Stack
 
-- **Framework**: Next.js 16.0.1 (App Router)
-- **UI Library**: React 19.2.0
+- **Framework**: Next.js 16 (App Router)
+- **UI Library**: React 19
 - **Language**: TypeScript 5
 - **Styling**: Tailwind CSS 4
-- **API**: GitHub REST API v3
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
 - Node.js 20.x or later
-- A GitHub account
-- A GitHub Personal Access Token (instructions below)
+- pnpm
 
-### Installation
-
-1. **Clone the repository**
+### Local Development
 
 ```bash
-git clone https://github.com/your-username/pr-dashboard.git
-cd pr-dashboard
+# Install dependencies
+pnpm install
+
+# Configure environment (see envrc.example)
+cp envrc.example .envrc
+vim .envrc  # Set GITHUB_TOKEN and other values
+direnv allow
+
+# Run development server
+pnpm dev
 ```
 
-2. **Install dependencies**
+Open [http://localhost:3000](http://localhost:3000)
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `GITHUB_TOKEN` | GitHub Personal Access Token (required) | `ghp_xxxx` |
+| `GITHUB_DEFAULT_REPOS` | Comma-separated list of repos for the main dashboard | `openshift/hypershift,org/repo2` |
+| `GITHUB_DASHBOARDS` | JSON array of dashboard configurations | See below |
+
+### Dashboard Configuration
+
+Configure multiple dashboards via the `GITHUB_DASHBOARDS` environment variable:
+
+```json
+[
+  {
+    "id": "hypershift",
+    "name": "HyperShift PRs",
+    "repos": "openshift/hypershift",
+    "filter": "states=open"
+  },
+  {
+    "id": "bot-prs",
+    "name": "Bot PRs",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&authors=dependabot[bot],renovate[bot]"
+  },
+  {
+    "id": "docs",
+    "name": "Documentation",
+    "repos": "openshift/hypershift",
+    "filter": "states=open&labels=area/documentation"
+  }
+]
+```
+
+Each dashboard is accessible at `/<dashboard-id>` (e.g., `/hypershift`, `/bot-prs`).
+
+### Filter URL Parameters
+
+Filters are synced to URL for easy sharing:
+
+- `states` - PR states: `open`, `closed`, `merged` (comma-separated)
+- `labels` - Label names (comma-separated, AND logic)
+- `authors` - Author logins (comma-separated)
+- `branches` - Target branches (comma-separated)
+- `search` - Search query
+
+Example: `/?states=open&labels=area/aws,priority/critical&authors=user1`
+
+## Build & Deploy
+
+The application is currently deployed on OpenShift. A `Taskfile.yml` is provided for build and deployment automation.
+
+### Prerequisites
+
+- [go-task](https://taskfile.dev/) - `brew install go-task`
+- [gum](https://github.com/charmbracelet/gum) - `brew install gum`
+- [podman](https://podman.io/) - `brew install podman`
+- [direnv](https://direnv.net/) - `brew install direnv`
+- `oc` CLI for OpenShift deployment
+
+### Environment Setup
 
 ```bash
-npm install
+# Copy the example and fill in your values
+cp envrc.example .envrc
+vim .envrc
+
+# Allow direnv to load the environment
+direnv allow
 ```
 
-3. **Configure GitHub Token (Optional)**
-
-You have two options for providing a GitHub token:
-
-**Option A: Server-side token (Recommended for personal use)**
-
-Create a `.env.local` file and add your token:
+### Available Tasks
 
 ```bash
-GITHUB_TOKEN=ghp_your_github_token_here
+task --list
 ```
 
-With this approach, the token is used automatically and users don't need to enter it in the UI.
+| Task | Description |
+|------|-------------|
+| `dev` | Run development server |
+| `build` | Build container image with podman |
+| `push` | Push image to registry |
+| `container-run` | Run container locally |
+| `container-stop` | Stop local container |
+| `container-logs` | Show local container logs |
+| `deploy` | Deploy to OpenShift (secrets, configmap, app, route) |
+| `deploy-custom-domain` | Create route for custom domain with optional TLS |
+| `deploy-status` | Show deployment status |
+| `deploy-logs` | Stream pod logs |
+| `rollout` | Restart deployment |
+| `undeploy` | Delete all resources |
+| `status` | Show environment status |
+| `all` | Build, push, and deploy |
 
-**Option B: Client-side token**
-
-If you don't configure a server-side token, users will be prompted to enter their own GitHub token in the UI when they first visit the application.
-
-**Option C: Pre-configure default repositories**
-
-You can also set default repositories that will be automatically selected when the dashboard loads. This is useful for team deployments:
+### Container Build
 
 ```bash
-GITHUB_DEFAULT_REPOS=owner/repo1,owner/repo2,anotherowner/repo3
+# Build with default settings (quay.io/abdalla/pr-dashboard:latest)
+task build
+
+# Override image settings
+IMAGE_REGISTRY=quay.io IMAGE_REPO=myorg IMAGE_TAG=v1.0.0 task build
+
+# Push to registry
+task push
 ```
 
-Example for a single repository:
-```bash
-GITHUB_DEFAULT_REPOS=deseretdigital/marketplace-frontend
-```
-
-4. **Run the development server**
-
-```bash
-npm run dev
-```
-
-5. **Open your browser**
-
-Navigate to [http://localhost:3000](http://localhost:3000)
-
-### GitHub Personal Access Token
-
-The application supports two ways to authenticate with GitHub:
-
-#### Server-Side Token (Recommended for personal/team use)
-
-Set the `GITHUB_TOKEN` environment variable in `.env.local`:
+### OpenShift Deployment
 
 ```bash
-GITHUB_TOKEN=ghp_your_token_here
+# Create the namespace (if it doesn't exist)
+oc new-project pr-dashboard
+
+# Ensure environment is configured (via direnv or .envrc)
+# Edit GITHUB_TOKEN, GITHUB_DEFAULT_REPOS, GITHUB_DASHBOARDS in .envrc
+
+# Deploy
+task deploy
+
+# Check status
+task deploy-status
 ```
 
-Benefits:
-- Users don't need to configure anything
-- Token is kept secure on the server
-- Ideal for personal use or team deployments
+### Custom Domain with TLS
 
-#### Client-Side Token (User-provided)
+To use a custom domain (e.g., `pr.hypershift.dev`):
 
-If no server token is configured, users will be prompted to enter their own token:
+1. **Add CNAME record** in your DNS provider:
+   ```
+   pr  CNAME  <your-openshift-route-hostname>
+   ```
 
-1. Go to [GitHub Settings > Personal Access Tokens](https://github.com/settings/tokens/new)
-2. Click "Generate new token (classic)"
-3. Give it a descriptive name (e.g., "PR Dashboard")
-4. Select the following scopes:
-   - `repo` - Full control of private repositories
-5. Click "Generate token"
-6. Copy the token (you won't be able to see it again!)
-7. Paste it into the application when prompted
+2. **Get TLS certificate** from Let's Encrypt:
+   ```bash
+   sudo certbot certonly --manual --preferred-challenges dns -d pr.hypershift.dev
+   ```
 
-The token is stored securely in your browser's localStorage and is only used to make API requests to GitHub.
+3. **Deploy with certificate**:
+   ```bash
+   # Set in .envrc or export directly
+   export TLS_CERT="/etc/letsencrypt/live/pr.hypershift.dev/fullchain.pem"
+   export TLS_KEY="/etc/letsencrypt/live/pr.hypershift.dev/privkey.pem"
+
+   task deploy-custom-domain
+   ```
+
+Note: Let's Encrypt certificates expire every 90 days and require manual renewal.
 
 ## Project Structure
 
 ```
 pr-dashboard/
 ├── app/
-│   ├── api/github/        # GitHub API routes
+│   ├── [dashboard]/       # Dynamic dashboard routes
+│   ├── api/github/        # GitHub API routes with caching
 │   ├── components/        # React components
-│   ├── hooks/            # Custom React hooks
-│   ├── lib/              # Utility functions
-│   ├── types/            # TypeScript definitions
-│   └── page.tsx          # Main dashboard page
-├── AGENTS.md             # AI agent guidelines
-└── README.md            # This file
+│   ├── hooks/             # Custom React hooks
+│   ├── lib/               # Utilities and cache
+│   └── types/             # TypeScript definitions
+├── envrc.example         # direnv environment template
+├── Containerfile          # Multi-stage container build (UBI9)
+├── Taskfile.yml           # Build and deploy automation
+└── README.md
 ```
 
 ## License

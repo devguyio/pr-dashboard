@@ -11,6 +11,7 @@ interface FilterBarProps {
   filters: Partial<FilterOptions>;
   availableLabels: Label[];
   availableAuthors: Author[];
+  availableBranches: string[];
   onFiltersChange: (filters: Partial<FilterOptions>) => void;
 }
 
@@ -18,6 +19,7 @@ export function FilterBar({
   filters,
   availableLabels,
   availableAuthors,
+  availableBranches,
   onFiltersChange,
 }: FilterBarProps) {
   const handleStateChange = (state: FilterOptions['states'][number]) => {
@@ -44,6 +46,14 @@ export function FilterBar({
     onFiltersChange({ ...filters, authors: newAuthors });
   };
 
+  const handleBranchChange = (branch: string) => {
+    const currentBranches = filters.branches || [];
+    const newBranches = currentBranches.includes(branch)
+      ? currentBranches.filter((b) => b !== branch)
+      : [...currentBranches, branch];
+    onFiltersChange({ ...filters, branches: newBranches });
+  };
+
   const handleSearchChange = (query: string) => {
     onFiltersChange({ ...filters, searchQuery: query });
   };
@@ -52,6 +62,7 @@ export function FilterBar({
     onFiltersChange({
       states: ['open'],
       labels: [],
+      branches: [],
       authors: [],
       searchQuery: '',
     });
@@ -60,6 +71,7 @@ export function FilterBar({
   const activeFilterCount =
     (filters.states?.length || 0) +
     (filters.labels?.length || 0) +
+    (filters.branches?.length || 0) +
     (filters.authors?.length || 0) +
     (filters.searchQuery ? 1 : 0);
 
@@ -132,6 +144,29 @@ export function FilterBar({
               >
                 <img src={author.avatarUrl} alt={author.login} className="w-4 h-4 rounded-full" />
                 {author.login}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Branches Filter */}
+      {availableBranches.length > 0 && (
+        <div>
+          <div className="block text-sm font-medium text-gray-700 mb-2">Target Branch</div>
+          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+            {availableBranches.map((branch) => (
+              <button
+                key={branch}
+                type="button"
+                onClick={() => handleBranchChange(branch)}
+                className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                  filters.branches?.includes(branch)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                }`}
+              >
+                {branch}
               </button>
             ))}
           </div>
