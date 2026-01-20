@@ -36,7 +36,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [dashboards, setDashboards] = useState<DashboardConfig[]>([]);
   const [isLoadingDashboards, setIsLoadingDashboards] = useState(true);
-  const [hasServerToken, setHasServerToken] = useState<boolean | null>(null);
+  const [, setHasServerToken] = useState<boolean | null>(null);
   const [hasDefaultRepos, setHasDefaultRepos] = useState(false);
   const [githubToken, setGithubToken] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -401,6 +401,20 @@ export default function Home() {
 
         <main className="px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-4xl mx-auto">
+            <Link
+              href="/all"
+              className="block p-6 mb-8 bg-blue-50 rounded-lg shadow hover:shadow-md transition-shadow border border-blue-200"
+            >
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Default PRs</h3>
+              <p className="text-sm text-gray-600">View PRs from default repositories</p>
+            </Link>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 border-t border-gray-300" />
+              <span className="text-sm text-gray-500 uppercase tracking-wide">or</span>
+              <div className="flex-1 border-t border-gray-300" />
+            </div>
+
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Select a Dashboard</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {dashboards.map((dashboard) => (
@@ -547,26 +561,15 @@ export default function Home() {
             <Link href="/" className="text-2xl font-bold text-gray-900 hover:text-gray-700">
               PR Dashboard
             </Link>
-            <div className="flex items-center gap-4">
-              {hasServerToken && (
-                <span className="text-sm text-gray-500">Using server-configured token</span>
-              )}
-              {hasDefaultRepos && selectedRepositories.length > 0 && (
-                <span className="text-sm text-gray-500">
-                  Monitoring {selectedRepositories.length}{' '}
-                  {selectedRepositories.length === 1 ? 'repository' : 'repositories'}
-                </span>
-              )}
-              {isElectron && (
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(true)}
-                  className="text-sm text-gray-600 hover:text-gray-900"
-                >
-                  Settings
-                </button>
-              )}
-            </div>
+            {isElectron && (
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Settings
+              </button>
+            )}
           </div>
         </div>
       </header>
