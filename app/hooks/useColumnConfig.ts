@@ -12,7 +12,7 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'age', label: 'Created', visible: true, order: 5, width: 180, sortable: true },
   { id: 'labels', label: 'Labels', visible: true, order: 6, width: 200 },
   { id: 'assignees', label: 'Assignees', visible: false, order: 7, width: 150 },
-  { id: 'reviewers', label: 'Reviewers', visible: false, order: 8, width: 150 },
+  { id: 'reviewers', label: 'Reviewers', visible: true, order: 8, width: 150 },
   { id: 'createdAt', label: 'Created', visible: false, order: 9, width: 120, sortable: true },
   { id: 'updatedAt', label: 'Updated', visible: true, order: 10, width: 120, sortable: true },
   { id: 'comments', label: 'Comments', visible: false, order: 11, width: 100 },

@@ -9,6 +9,12 @@ import { LabelGroupSelector } from './components/LabelGroupSelector';
 import { PRTable } from './components/PRTable';
 import { RefreshIndicator } from './components/RefreshIndicator';
 import { RepositorySelector } from './components/RepositorySelector';
+import {
+  loadConfig,
+  saveConfig,
+  useElectronConfig,
+  useIsElectron,
+} from './components/SettingsModal';
 import { StateSelector } from './components/StateSelector';
 import { useColumnConfig } from './hooks/useColumnConfig';
 import { usePullRequests } from './hooks/usePullRequests';
@@ -25,6 +31,9 @@ interface DashboardConfig {
 }
 
 export default function Home() {
+  const isElectron = useIsElectron();
+  const electronConfig = useElectronConfig();
+  const [showSettings, setShowSettings] = useState(false);
   const [dashboards, setDashboards] = useState<DashboardConfig[]>([]);
   const [isLoadingDashboards, setIsLoadingDashboards] = useState(true);
   const [hasServerToken, setHasServerToken] = useState<boolean | null>(null);
@@ -42,6 +51,9 @@ export default function Home() {
     return true;
   });
   const [tokenInput, setTokenInput] = useState('');
+  const [reposInput, setReposInput] = useState('');
+  const [dashboardsInput, setDashboardsInput] = useState('');
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [selectedRepositories, setSelectedRepositories] = useState<string[]>([]);
   const [groupByLabels, setGroupByLabels] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -76,8 +88,24 @@ export default function Home() {
   });
   const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
 
-  // Check if server has a token configured
+  // Check if server has a token configured (or use Electron config)
   useEffect(() => {
+    // Wait for Electron detection to complete
+    if (isElectron === null) return;
+
+    // In Electron, use config from localStorage
+    if (isElectron && electronConfig) {
+      if (electronConfig.githubToken) {
+        setGithubToken(electronConfig.githubToken);
+        setShowTokenInput(false);
+        setHasServerToken(false);
+      }
+      return;
+    }
+
+    // In Electron without config yet, wait for it
+    if (isElectron && !electronConfig) return;
+
     const checkServerToken = async () => {
       try {
         const response = await fetch('/api/github/auth');
@@ -97,10 +125,23 @@ export default function Home() {
     };
 
     checkServerToken();
-  }, []);
+  }, [isElectron, electronConfig]);
 
-  // Load dashboards from server
+  // Load dashboards from server (or use Electron config)
   useEffect(() => {
+    // Wait for Electron detection to complete
+    if (isElectron === null) return;
+
+    // In Electron, use config from localStorage
+    if (isElectron && electronConfig) {
+      setDashboards(electronConfig.dashboards);
+      setIsLoadingDashboards(false);
+      return;
+    }
+
+    // In Electron without config yet, wait for it
+    if (isElectron && !electronConfig) return;
+
     const loadDashboards = async () => {
       try {
         const response = await fetch('/api/github/dashboards');
@@ -114,10 +155,25 @@ export default function Home() {
     };
 
     loadDashboards();
-  }, []);
+  }, [isElectron, electronConfig]);
 
-  // Load default repositories from server
+  // Load default repositories from server (or use Electron config)
   useEffect(() => {
+    // Wait for Electron detection to complete
+    if (isElectron === null) return;
+
+    // In Electron, use config from localStorage
+    if (isElectron && electronConfig) {
+      if (electronConfig.defaultRepos.length > 0) {
+        setSelectedRepositories(electronConfig.defaultRepos);
+        setHasDefaultRepos(true);
+      }
+      return;
+    }
+
+    // In Electron without config yet, wait for it
+    if (isElectron && !electronConfig) return;
+
     const loadDefaultRepos = async () => {
       try {
         const response = await fetch('/api/github/defaults');
@@ -133,7 +189,7 @@ export default function Home() {
     };
 
     loadDefaultRepos();
-  }, []);
+  }, [isElectron, electronConfig]);
 
   // Save group labels to localStorage when they change
   useEffect(() => {
@@ -217,6 +273,22 @@ export default function Home() {
     return Array.from(branchSet).sort();
   }, [pullRequests]);
 
+  // Derive unique reviewers from all PRs
+  const availableReviewers = useMemo(() => {
+    const reviewerMap = new Map<string, { login: string; avatarUrl: string }>();
+    for (const pr of pullRequests) {
+      for (const reviewer of pr.reviewers) {
+        if (!reviewerMap.has(reviewer.login)) {
+          reviewerMap.set(reviewer.login, {
+            login: reviewer.login,
+            avatarUrl: reviewer.avatarUrl,
+          });
+        }
+      }
+    }
+    return Array.from(reviewerMap.values()).sort((a, b) => a.login.localeCompare(b.login));
+  }, [pullRequests]);
+
   // Fetch labels when repositories change
   useEffect(() => {
     if (githubToken && selectedRepositories.length > 0) {
@@ -249,30 +321,81 @@ export default function Home() {
     }
   }, [githubToken, selectedRepositories]);
 
-  const handleSaveToken = () => {
-    if (tokenInput.trim()) {
-      localStorage.setItem('github-token', tokenInput.trim());
-      setGithubToken(tokenInput.trim());
-      setShowTokenInput(false);
+  // Load settings form with current config when opening
+  useEffect(() => {
+    if (showSettings || showTokenInput) {
+      const config = loadConfig();
+      setTokenInput(config.githubToken || '');
+      setReposInput((config.defaultRepos || []).join(', '));
+      setDashboardsInput(
+        config.dashboards && config.dashboards.length > 0
+          ? JSON.stringify(config.dashboards, null, 2)
+          : '[]'
+      );
+      setSettingsError(null);
     }
+  }, [showSettings, showTokenInput]);
+
+  const handleSaveSettings = () => {
+    // Validate dashboards JSON
+    let parsedDashboards = [];
+    if (dashboardsInput.trim()) {
+      try {
+        parsedDashboards = JSON.parse(dashboardsInput);
+        if (!Array.isArray(parsedDashboards)) {
+          setSettingsError('Dashboards must be a JSON array');
+          return;
+        }
+      } catch (e) {
+        setSettingsError(`Invalid JSON: ${e instanceof Error ? e.message : 'Parse error'}`);
+        return;
+      }
+    }
+
+    // Parse repos
+    const repos = reposInput
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean);
+
+    // Save config
+    saveConfig({
+      githubToken: tokenInput.trim() || undefined,
+      defaultRepos: repos,
+      dashboards: parsedDashboards,
+    });
+
+    // Reload to apply
+    window.location.reload();
   };
 
-  const handleClearToken = () => {
-    localStorage.removeItem('github-token');
-    setGithubToken(null);
-    setTokenInput('');
-    setShowTokenInput(true);
-  };
+  // Show loading while detecting environment
+  if (isElectron === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   // If dashboards are configured, show dashboard selector
   if (!isLoadingDashboards && dashboards.length > 0) {
     return (
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow-sm">
-          <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <Link href="/" className="text-2xl font-bold text-gray-900 hover:text-gray-700">
               PR Dashboard
             </Link>
+            {isElectron && (
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Settings
+              </button>
+            )}
           </div>
         </header>
 
@@ -300,16 +423,32 @@ export default function Home() {
     );
   }
 
-  if (showTokenInput) {
+  // Show settings form for Electron, or config message for web
+  if (showTokenInput || showSettings) {
+    // Web without server token - show configuration needed message
+    if (!isElectron && !showSettings) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">PR Dashboard</h1>
+            <p className="text-gray-600 mb-4">Server configuration required.</p>
+            <p className="text-sm text-gray-500">
+              Please set the <code className="bg-gray-100 px-1 py-0.5 rounded">GITHUB_TOKEN</code>{' '}
+              environment variable to enable the dashboard.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Electron - show full settings form
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">PR Dashboard</h1>
-          <p className="text-gray-600 mb-6">
-            Enter your GitHub personal access token to get started. The token will be stored
-            securely in your browser&apos;s local storage.
-          </p>
-          <div className="space-y-4">
+        <div className="max-w-xl w-full bg-white rounded-lg shadow-lg p-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">PR Dashboard Settings</h1>
+
+          <div className="space-y-6">
+            {/* GitHub Token */}
             <div>
               <label htmlFor="token" className="block text-sm font-medium text-gray-700 mb-2">
                 GitHub Token
@@ -319,30 +458,81 @@ export default function Home() {
                 type="password"
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSaveToken()}
                 placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Need a token?{' '}
+                <a
+                  href="https://github.com/settings/tokens/new?scopes=repo"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  Create one here
+                </a>
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={handleSaveToken}
-              disabled={!tokenInput.trim()}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              Save Token
-            </button>
-            <p className="text-xs text-gray-500">
-              Need a token?{' '}
-              <a
-                href="https://github.com/settings/tokens/new?scopes=repo"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800"
+
+            {/* Default Repositories */}
+            <div>
+              <label htmlFor="repos" className="block text-sm font-medium text-gray-700 mb-2">
+                Default Repositories
+              </label>
+              <input
+                id="repos"
+                type="text"
+                value={reposInput}
+                onChange={(e) => setReposInput(e.target.value)}
+                placeholder="owner/repo, owner/repo2"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">Comma-separated list of repositories</p>
+            </div>
+
+            {/* Dashboards JSON */}
+            <div>
+              <label htmlFor="dashboards" className="block text-sm font-medium text-gray-700 mb-2">
+                Dashboards (JSON)
+              </label>
+              <textarea
+                id="dashboards"
+                value={dashboardsInput}
+                onChange={(e) => {
+                  setDashboardsInput(e.target.value);
+                  setSettingsError(null);
+                }}
+                placeholder='[{"id": "my-dashboard", "name": "My Dashboard", "repos": "owner/repo", "filter": ""}]'
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                spellCheck={false}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                JSON array of dashboard configurations (optional)
+              </p>
+            </div>
+
+            {settingsError && <p className="text-sm text-red-600">{settingsError}</p>}
+
+            <div className="flex gap-3">
+              {showSettings && (
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(false)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                disabled={!tokenInput.trim()}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
-                Create one here
-              </a>
-            </p>
+                Save
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -367,13 +557,13 @@ export default function Home() {
                   {selectedRepositories.length === 1 ? 'repository' : 'repositories'}
                 </span>
               )}
-              {!hasServerToken && (
+              {isElectron && (
                 <button
                   type="button"
-                  onClick={handleClearToken}
+                  onClick={() => setShowSettings(true)}
                   className="text-sm text-gray-600 hover:text-gray-900"
                 >
-                  Change Token
+                  Settings
                 </button>
               )}
             </div>
@@ -432,6 +622,7 @@ export default function Home() {
                   availableLabels={availableLabels}
                   availableAuthors={availableAuthors}
                   availableBranches={availableBranches}
+                  availableReviewers={availableReviewers}
                   onFiltersChange={setFilters}
                 />
 

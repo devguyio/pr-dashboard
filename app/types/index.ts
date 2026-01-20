@@ -32,7 +32,10 @@ export interface PullRequest {
   headBranch: string; // Source branch (e.g., "feature/foo")
   labels: Label[];
   assignees: string[];
-  reviewers: string[];
+  reviewers: {
+    login: string;
+    avatarUrl: string;
+  }[];
   createdAt: Date;
   updatedAt: Date;
   closedAt?: Date;
@@ -167,7 +170,10 @@ export const transformPullRequest = (pr: GitHubPullRequest): PullRequest => {
       description: label.description,
     })),
     assignees: pr.assignees.map((user) => user.login),
-    reviewers: pr.requested_reviewers.map((user) => user.login),
+    reviewers: pr.requested_reviewers.map((user) => ({
+      login: user.login,
+      avatarUrl: user.avatar_url,
+    })),
     createdAt: new Date(pr.created_at),
     updatedAt: new Date(pr.updated_at),
     closedAt: pr.closed_at ? new Date(pr.closed_at) : undefined,

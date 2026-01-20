@@ -2,6 +2,12 @@
   "name": "pr-dashboard",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +17,9 @@
     "format": "biome format .",
     "format:fix": "biome format --write .",
     "check": "biome check .",
-    "check:fix": "biome check --write ."
+    "check:fix": "biome check --write .",
+    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "pnpm build && electron-builder"
   },
   "dependencies": {
     "next": "16.0.1",
@@ -24,9 +32,37 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9",
+    "electron": "^34",
+    "electron-builder": "^25",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^8"
+  },
+  "build": {
+    "appId": "dev.hypershift.pr-dashboard",
+    "productName": "PR Dashboard",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      ".next/standalone/**/*",
+      ".next/static/**/*",
+      "public/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    }
   }
 }

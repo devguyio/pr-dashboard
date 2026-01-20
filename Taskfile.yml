@@ -8,6 +8,12 @@ vars:
   IMAGE_NAME: '{{.IMAGE_NAME | default "pr-dashboard"}}'
   GIT_SHA:
     sh: git rev-parse --short HEAD 2>/dev/null || echo "latest"
+  GIT_COMMIT:
+    sh: git rev-parse HEAD 2>/dev/null || echo ""
+  GIT_REF:
+    sh: git symbolic-ref --short HEAD 2>/dev/null || echo ""
+  BUILD_DATE:
+    sh: date -u +"%Y-%m-%dT%H:%M:%SZ"
   IMAGE_TAG: '{{.IMAGE_TAG | default .GIT_SHA}}'
   IMAGE: '{{.IMAGE_REGISTRY}}/{{.IMAGE_REPO}}/{{.IMAGE_NAME}}:{{.IMAGE_TAG}}'
   IMAGE_LATEST: '{{.IMAGE_REGISTRY}}/{{.IMAGE_REPO}}/{{.IMAGE_NAME}}:latest'
@@ -32,7 +38,7 @@ tasks:
         silent: true
       - cmd: gum style --faint "Output:"
         silent: true
-      - podman build -t {{.IMAGE}} -f Containerfile .
+      - podman build -t {{.IMAGE}} -f Containerfile --build-arg GIT_COMMIT={{.GIT_COMMIT}} --build-arg GIT_REF={{.GIT_REF}} --build-arg BUILD_DATE={{.BUILD_DATE}} --build-arg VERSION={{.IMAGE_TAG}} .
       - podman tag {{.IMAGE}} {{.IMAGE_REGISTRY}}/{{.IMAGE_REPO}}/{{.IMAGE_NAME}}:latest
       - cmd: gum style --border normal --padding "0 1" --border-foreground 10 "Build Complete"
         silent: true
@@ -95,6 +101,28 @@ tasks:
     desc: Show local container logs
     cmds:
       - podman logs -f pr-dashboard-local
+
+  # ============================================================================
+  # Electron Desktop App Tasks
+  # ============================================================================
+
+  electron:dev:
+    desc: Run Electron desktop app in development mode
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Starting Electron Dev Mode"
+        silent: true
+      - pnpm electron:dev
+
+  electron:build:
+    desc: Build Electron desktop app for distribution
+    cmds:
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 212 "Building Electron App"
+        silent: true
+      - pnpm electron:build
+      - cmd: gum style --border normal --padding "0 1" --border-foreground 10 "Electron Build Complete"
+        silent: true
+      - cmd: gum format "✓ Desktop app built in dist-electron/"
+        silent: true
 
   # ============================================================================
   # OpenShift Deploy Tasks

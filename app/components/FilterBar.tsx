@@ -9,11 +9,17 @@ interface Author {
   avatarUrl: string;
 }
 
+interface Reviewer {
+  login: string;
+  avatarUrl: string;
+}
+
 interface FilterBarProps {
   filters: Partial<FilterOptions>;
   availableLabels: Label[];
   availableAuthors: Author[];
   availableBranches: string[];
+  availableReviewers: Reviewer[];
   onFiltersChange: (filters: Partial<FilterOptions>) => void;
 }
 
@@ -22,6 +28,7 @@ export function FilterBar({
   availableLabels,
   availableAuthors,
   availableBranches,
+  availableReviewers,
   onFiltersChange,
 }: FilterBarProps) {
   const handleLabelChange = (labelName: string) => {
@@ -48,6 +55,14 @@ export function FilterBar({
     onFiltersChange({ ...filters, branches: newBranches });
   };
 
+  const handleReviewerChange = (reviewer: string) => {
+    const currentReviewers = filters.reviewers || [];
+    const newReviewers = currentReviewers.includes(reviewer)
+      ? currentReviewers.filter((r) => r !== reviewer)
+      : [...currentReviewers, reviewer];
+    onFiltersChange({ ...filters, reviewers: newReviewers });
+  };
+
   const handleSearchChange = (query: string) => {
     onFiltersChange({ ...filters, searchQuery: query });
   };
@@ -57,6 +72,7 @@ export function FilterBar({
       labels: [],
       branches: [],
       authors: [],
+      reviewers: [],
       searchQuery: '',
     });
   };
@@ -65,10 +81,12 @@ export function FilterBar({
     (filters.labels?.length || 0) +
     (filters.branches?.length || 0) +
     (filters.authors?.length || 0) +
+    (filters.reviewers?.length || 0) +
     (filters.searchQuery ? 1 : 0);
 
   const [authorSearch, setAuthorSearch] = useState('');
   const [branchSearch, setBranchSearch] = useState('');
+  const [reviewerSearch, setReviewerSearch] = useState('');
   const [labelSearch, setLabelSearch] = useState('');
 
   const filteredAuthors = availableAuthors.filter((author) =>
@@ -77,6 +95,10 @@ export function FilterBar({
 
   const filteredBranches = availableBranches.filter((branch) =>
     branch.toLowerCase().includes(branchSearch.toLowerCase())
+  );
+
+  const filteredReviewers = availableReviewers.filter((reviewer) =>
+    reviewer.login.toLowerCase().includes(reviewerSearch.toLowerCase())
   );
 
   const filteredLabels = availableLabels.filter((label) =>
@@ -174,6 +196,43 @@ export function FilterBar({
                 }`}
               >
                 {branch}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reviewers Filter */}
+      {availableReviewers.length > 0 && (
+        <div>
+          <div className="block text-sm font-medium text-gray-700 mb-2">Reviewers</div>
+          <input
+            type="text"
+            placeholder="Search reviewers..."
+            value={reviewerSearch}
+            onChange={(e) => setReviewerSearch(e.target.value)}
+            className="w-full px-3 py-1.5 text-sm text-gray-900 border border-gray-300 rounded mb-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+            {filteredReviewers.map((reviewer) => (
+              <button
+                key={reviewer.login}
+                type="button"
+                onClick={() => handleReviewerChange(reviewer.login)}
+                className={`px-3 py-1 text-sm rounded-full border transition-colors flex items-center gap-1 ${
+                  filters.reviewers?.includes(reviewer.login)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                }`}
+              >
+                <Image
+                  src={reviewer.avatarUrl}
+                  alt={reviewer.login}
+                  width={16}
+                  height={16}
+                  className="rounded-full"
+                />
+                {reviewer.login}
               </button>
             ))}
           </div>

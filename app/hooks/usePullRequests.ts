@@ -206,8 +206,9 @@ export function usePullRequests({
 
       // Filter by reviewers
       if (filters.reviewers && filters.reviewers.length > 0) {
+        const prReviewerLogins = pr.reviewers.map((r) => r.login);
         const hasMatchingReviewer = filters.reviewers.some((reviewer) =>
-          pr.reviewers.includes(reviewer)
+          prReviewerLogins.includes(reviewer)
         );
         if (!hasMatchingReviewer) {
           return false;

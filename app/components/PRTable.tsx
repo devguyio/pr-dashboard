@@ -212,7 +212,27 @@ export function PRTable({ pullRequests, columns, isLoading }: PRTableProps) {
                           key={column.id}
                           className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
                         >
-                          {pr.reviewers.length > 0 ? pr.reviewers.join(', ') : '—'}
+                          {pr.reviewers.length > 0 ? (
+                            <div className="flex items-center gap-1">
+                              {pr.reviewers.map((reviewer) => (
+                                <div
+                                  key={reviewer.login}
+                                  className="flex items-center"
+                                  title={reviewer.login}
+                                >
+                                  <Image
+                                    src={reviewer.avatarUrl}
+                                    alt={reviewer.login}
+                                    width={24}
+                                    height={24}
+                                    className="h-6 w-6 rounded-full"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                       );
                     case 'createdAt':

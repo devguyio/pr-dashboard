@@ -276,6 +276,22 @@ export default function DashboardPage() {
     return Array.from(branchSet).sort();
   }, [repoFilteredPRs]);
 
+  // Derive unique reviewers from selected repos' PRs
+  const availableReviewers = useMemo(() => {
+    const reviewerMap = new Map<string, { login: string; avatarUrl: string }>();
+    for (const pr of repoFilteredPRs) {
+      for (const reviewer of pr.reviewers) {
+        if (!reviewerMap.has(reviewer.login)) {
+          reviewerMap.set(reviewer.login, {
+            login: reviewer.login,
+            avatarUrl: reviewer.avatarUrl,
+          });
+        }
+      }
+    }
+    return Array.from(reviewerMap.values()).sort((a, b) => a.login.localeCompare(b.login));
+  }, [repoFilteredPRs]);
+
   // Fetch labels for all dashboard repos (not just selected)
   useEffect(() => {
     if (githubToken && allRepos.length > 0) {
@@ -399,6 +415,7 @@ export default function DashboardPage() {
               availableLabels={availableLabels}
               availableAuthors={availableAuthors}
               availableBranches={availableBranches}
+              availableReviewers={availableReviewers}
               onFiltersChange={setFilters}
             />
 

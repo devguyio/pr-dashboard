@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(tree:*)",
+      "Bash(pnpm run dev:*)",
+      "Bash(pnpm run check:*)",
+      "Bash(pnpm run check:fix:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(podman tag:*)",
+      "Bash(podman push:*)",
+      "Skill(taskify)",
+      "Bash(task --list:*)",
+      "Bash(task status:*)",
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:docs.redhat.com)",
+      "Bash(pnpm check:fix:*)",
+      "Bash(pnpm check:*)"
+    ]
+  }
+}

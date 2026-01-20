@@ -30,6 +30,9 @@ function filtersToSearchParams(filters: Partial<FilterOptions>): URLSearchParams
   if (filters.authors && filters.authors.length > 0) {
     params.set('authors', filters.authors.join(','));
   }
+  if (filters.reviewers && filters.reviewers.length > 0) {
+    params.set('reviewers', filters.reviewers.join(','));
+  }
   if (filters.searchQuery) {
     params.set('search', filters.searchQuery);
   }
@@ -52,6 +55,9 @@ function searchParamsToFilters(params: URLSearchParams): Partial<FilterOptions> 
   const authors = parseStringArray(params.get('authors'));
   if (authors) filters.authors = authors;
 
+  const reviewers = parseStringArray(params.get('reviewers'));
+  if (reviewers) filters.reviewers = reviewers;
+
   const search = params.get('search');
   if (search) filters.searchQuery = search;
 
@@ -68,6 +74,7 @@ function hasUrlParams(): boolean {
     params.has('labels') ||
     params.has('branches') ||
     params.has('authors') ||
+    params.has('reviewers') ||
     params.has('search') ||
     params.has('repos')
   );
@@ -84,6 +91,7 @@ export function useUrlFilters(defaults: Partial<FilterOptions> = {}): UseUrlFilt
         labels: urlFilters.labels || defaults.labels || [],
         branches: urlFilters.branches || defaults.branches || [],
         authors: urlFilters.authors || defaults.authors || [],
+        reviewers: urlFilters.reviewers || defaults.reviewers || [],
         searchQuery: urlFilters.searchQuery || defaults.searchQuery || '',
         repositories: urlFilters.repositories || defaults.repositories || [],
       };
@@ -110,6 +118,7 @@ export function useUrlFilters(defaults: Partial<FilterOptions> = {}): UseUrlFilt
             labels: serverFilters.labels || defaults.labels || [],
             branches: serverFilters.branches || defaults.branches || [],
             authors: serverFilters.authors || defaults.authors || [],
+            reviewers: serverFilters.reviewers || defaults.reviewers || [],
             searchQuery: serverFilters.searchQuery || defaults.searchQuery || '',
             repositories: serverFilters.repositories || defaults.repositories || [],
           };
